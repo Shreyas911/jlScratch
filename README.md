@@ -1,3 +1,3 @@
 # jlScratch
 
-A repositiory where my experiments with the Julia porgramming language are stored.
+A repositiory where my experiments with the Julia programming language are stored.
