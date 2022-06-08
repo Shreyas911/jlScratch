@@ -16,14 +16,14 @@ using Enzyme
 # # output
 # # (3.966106403010388, [2.3297408241459623, 3.4946112362189434], 54450.0)
 
-function forward_problem(xx, nx, dx, xend)
+function forward_problem(xx, nx, dx, xend, dt, tend)
 	rho = 920.0
 	g = 9.2
 	n = 3
 	A = 1.e-16
-	dt = 1/12.0
+	#dt = 1/12.0
 	C = 2*A/(n+2)*(rho*g)^n*(1.e3)^n
-	tend = 1000.0
+	#tend = 1000.0
 	bx = -0.0001
 	M0 = .004
 	M1 = 0.0002
@@ -63,8 +63,11 @@ end
 
 dx = 1.0
 xend = 30.0
+dt = 1/12.0
+tend = 500.0
+
 nx = Int(round(xend/dx))
 xx = zeros(nx+1)
 ∂V_∂xx=zero(xx)
-autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend)
+autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, dt, tend)
 println(∂V_∂xx)
