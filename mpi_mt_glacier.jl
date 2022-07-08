@@ -79,6 +79,7 @@ function forward_problem(xx::AbstractArray, nx::Int, dx::Float64, xend::Float64,
 	#Communications
 	if rank > 0
 		MPI.Send(V_local, 0, rank, comm)
+		return
 	else
 		V_total = V_local[1]
 		for i in 1:N-1
@@ -102,7 +103,7 @@ xx = zeros(nx+1)
 
 @show V_ice = forward_problem(xx, nx, dx, xend, nt, dt, tend, Array)
 
-# ∂V_∂xx=zero(xx)
-# autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, nt, dt, tend, Array)
-# println(∂V_∂xx)
+∂V_∂xx=Array(zero(xx))
+autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, nt, dt, tend, Array)
+println(∂V_∂xx)
 
