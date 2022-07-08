@@ -98,12 +98,12 @@ dt = 1/12.0
 tend = 10.0
 nx = Int(round(xend/dx))
 nt = Int(round(tend/dt))
-xx = zeros(nx+1)
+xx = Array(zeros(nx+1))
 
 
 @show V_ice = forward_problem(xx, nx, dx, xend, nt, dt, tend, Array)
 
 ∂V_∂xx=Array(zero(xx))
-autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, nt, dt, tend, Array)
+Enzyme.autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, nt, dt, tend, Array)
 println(∂V_∂xx)
 
