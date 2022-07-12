@@ -23,57 +23,91 @@ function forward_problem(xx::AbstractArray, nx::Int, dx::Float64, xend::Float64,
 	M0 = .004
 	M1 = 0.0002
 	nt = Int(round(tend/dt))
-	h = AT(zeros((nx+1, nt+1)))
-	h_capital = AT(zeros((nx+1, nt+1)))
-	D = AT(zeros(nx))
-	phi = AT(zeros(nx))
-	xarr = AT([(i-1)*dx for i in 1:nx+1])
-	M = AT(zeros(nx+1))
-	b = AT(zeros(nx+1))
-	M .= M0 .- xarr .* M1 .+ xx
-	b .= 1.0 .+ bx .* xarr
-	bfirst = 1.0
-	bend = 1.0 + bx * nx *dx
 
-	h[1,:] .= AT(ones(size(h[1,:]))) .* bfirst
-	h[:,1] .= AT(ones(size(h[:,1]))) .* bfirst
-	h[nx+1,:] .= AT(ones(size(h[nx+1,:]))) .* bend
-	h_capital[1,:] .= h[1,:] .- bfirst
-	h_capital[nx+1,:] .= h[nx+1,:] .- bend
-	h_capital[:,1] .= h[:,1] .- b
-
-	N = MPI.Comm_size(comm)
 	rank = MPI.Comm_rank(comm)
-
-	V_local = AT(zeros(1))
-	V_total = 0.0
+	size = MPI.Comm_size(comm)
 
 	# One step in time for one part of the domainor one thread 
-	i1 = Int(round(rank / N * (nx+N))) - rank + 2
-	i2 = Int(round((rank + 1) / N * (nx+N))) - rank
+	i1 = Int(round(rank / size * (nx+size))) - rank + 1
+	i2 = Int(round((rank + 1) / size * (nx+size))) - rank
+
+	nx_local = i2-i1
+
+	print("Rank $(rank) of $(size) with domain limits $(i1), $(i2) and nx_local $(nx_local)\n")
+
+	h = AT(zeros((nx_local+1, nt+1)))
+	h_capital = AT(zeros((nx_local+1, nt+1)))
+
+	D = AT(zeros(nx_local))
+	phi = AT(zeros(nx_local))
+	xarr = AT([(i-1)*dx for i in i1:i2])
+	M = AT(zeros(nx_local+1))
+	b = AT(zeros(nx_local+1))
+
+	M .= M0 .- xarr .* M1 .+ xx[i1:i2]
+	b .= 1.0 .+ bx .* xarr
 
 	if rank == 0
-		i1 = 2
+		h[1,:] .= AT(ones(nt+1)) .* b[1]
+		h_capital[1,:] .= h[1,:] .- b[1]
 	end
-	if rank == N - 1
-		i2 = nx
+	if rank == size - 1
+		h[nx_local+1,:] .= AT(ones(nt+1)) .* b[nx_local+1]
+		h_capital[nx_local+1,:] .= h[nx_local+1,:] .- b[nx_local+1]
 	end
-
-	print("Rank $(rank) of $(N) with domain limits $(i1), $(i2)\n")
+	h[:,1] .= AT(ones(nx_local+1)) .* b
+	h_capital[:,1] .= h[:,1] .- b
 
 	@inbounds for t in 1:nt
 
-		D[i1-1:i2] .= C .* ((h_capital[i1-1:i2,t] .+ h_capital[i1:i2+1,t]) ./ 2.0).^(n+2) .* ((h[i1:i2+1,t] .- h[i1-1:i2,t]) ./ dx).^(n-1)
+	# 	# D[i1-1:i2] .= C .* ((h_capital[i1-1:i2,t] .+ h_capital[i1:i2+1,t]) ./ 2.0).^(n+2) .* ((h[i1:i2+1,t] .- h[i1-1:i2,t]) ./ dx).^(n-1)
 
-		phi[i1-1:i2] .= -D[i1-1:i2] .* (h[i1:i2+1,t] .- h[i1-1:i2,t]) ./ dx
-		h[i1:i2,t+1] .= h[i1:i2,t] .+ M[i1:i2] .* dt .- dt/dx .* (phi[i1:i2] .- phi[i1-1:i2-1])
+	# 	# phi[i1-1:i2] .= -D[i1-1:i2] .* (h[i1:i2+1,t] .- h[i1-1:i2,t]) ./ dx
+	# 	# h[i1:i2,t+1] .= h[i1:i2,t] .+ M[i1:i2] .* dt .- dt/dx .* (phi[i1:i2] .- phi[i1-1:i2-1])
 
-		h[i1:i2,t+1] .= update_h.(h[i1:i2,t+1], b[i1:i2])
-		h_capital[i1:i2,t+1] .= h[i1:i2,t+1] .- b[i1:i2]
+	# 	# h[i1:i2,t+1] .= update_h.(h[i1:i2,t+1], b[i1:i2])
+	# 	# h_capital[i1:i2,t+1] .= h[i1:i2,t+1] .- b[i1:i2]
+
+		D .= C .* ((h_capital[1:nx_local,t] .+ h_capital[2:nx_local+1,t]) ./ 2.0).^(n+2) .* ((h[2:nx_local+1,t] .- h[1:nx_local,t]) ./ dx).^(n-1)
+		phi .= -D .* (h[2:nx_local+1,t] .- h[1:nx_local,t]) ./ dx
+		h[2:nx_local,t+1] .= h[2:nx_local,t] .+ M[2:nx_local] .* dt .- dt/dx .* (phi[2:nx_local] .- phi[1:nx_local-1])
+
+		h[2:nx_local,t+1] .= update_h.(h[2:nx_local,t+1], b[2:nx_local])
+		h_capital[2:nx_local,t+1] .= h[2:nx_local,t+1] .- b[2:nx_local]
+
+		send_mesg = Array{Float64}(undef, 1)
+		recv_mesg = Array{Float64}(undef, 1)
+		if rank == 1
+			fill!(send_mesg, Float64(phi[0]))
+			sreq = MPI.Send(send_mesg, 0, 100 + rank, comm)
+			rreq = MPI.Irecv!(recv_mesg, 0, 100 + rank - 1, comm)
+
+			h[1,t+1] = h[1,t] + M[1] * dt - dt/dx * (phi[1] - recv_mesg[1])
+			h[1,t+1] = update_h(h[1,t+1], b[1])
+			h_capital[1,t+1] = h[1,t+1] - b[1]
+			print("$(h_capital[nx_local+1,t+1]), $(h[nx_local+1,t]), $(M[nx_local+1]), $(phi[1] - recv_mesg[1])\n")
+		end
+		if rank == 0
+			fill!(send_mesg, Float64(phi[nx_local]))
+			sreq = MPI.Send(send_mesg, 1, 100 + rank, comm)
+			rreq = MPI.Irecv!(recv_mesg, 1, 100 + rank + 1, comm)
+
+			h[nx_local+1,t+1] = h[nx_local+1,t] + M[nx_local+1] * dt - dt/dx * (recv_mesg[1] - phi[nx_local])
+			h[nx_local+1,t+1] = update_h(h[nx_local+1,t+1], b[nx_local+1])
+			h_capital[nx_local+1,t+1] = h[nx_local+1,t+1] - b[nx_local+1]
+			print("$(h_capital[nx_local+1,t+1]), $(h[nx_local+1,t]), $(M[nx_local+1]), $(recv_mesg[1] - phi[nx_local])\n")
+		end
+		MPI.Barrier(comm)
+
+
 	end
 
-	V_local = sum(h_capital[:,nt+1].*dx)
+	V_local = sum(h_capital[2:nx_local+1,nt+1].*dx)
+
 	return V_local
+
+
+
 	# MPI.Barrier(comm)
 
 	#Communications
@@ -82,7 +116,7 @@ function forward_problem(xx::AbstractArray, nx::Int, dx::Float64, xend::Float64,
 	# 	return V_local
 	# else
 	# 	V_total = V_local[1]
-	# 	for i in 1:N-1
+	# 	for i in 1:size-1
 	# 		MPI.Recv!(V_local, i, i, comm)
 	# 		V_total = V_total + V_local[1]
 	# 	end
@@ -104,16 +138,16 @@ xx = zeros(nx+1)
 ∂V_∂xx=zero(xx)
 @show V = forward_problem(xx,nx,dx,xend,dt,tend, Array)
 
-MPI.Barrier(comm)
+# MPI.Barrier(comm)
 
-autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, dt, tend, Array)
+# autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, dt, tend, Array)
 
-MPI.Barrier(comm)
+# MPI.Barrier(comm)
 
-for i in 0:MPI.Comm_size(comm)-1
-	if MPI.Comm_rank(comm) == i
-		println(∂V_∂xx)
-	end
-end
+# for i in 0:MPI.Comm_size(comm)-1
+# 	if MPI.Comm_rank(comm) == i
+# 		println(∂V_∂xx)
+# 	end
+# end
 
 MPI.Finalize()
