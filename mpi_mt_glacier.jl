@@ -140,16 +140,16 @@ xx = zeros(nx+1)
 V = forward_problem(xx,nx,dx,xend,dt,tend, Array)
 print("$(MPI.Comm_rank(comm)), V = $(V)\n")
 
-# MPI.Barrier(comm)
+MPI.Barrier(comm)
 
 # autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, dt, tend, Array)
 
-# MPI.Barrier(comm)
+MPI.Barrier(comm)
 
-# for i in 0:MPI.Comm_size(comm)-1
-# 	if MPI.Comm_rank(comm) == i
-# 		println(∂V_∂xx)
-# 	end
-# end
+for i in 0:MPI.Comm_size(comm)-1
+	if MPI.Comm_rank(comm) == i
+		println(∂V_∂xx)
+	end
+end
 
 MPI.Finalize()
