@@ -61,7 +61,7 @@ function forward_problem(xx::AbstractArray, nx::Int, dx::Float64, xend::Float64,
 
 		h[2:nx,t+1] .= update_h.(h[2:nx,t+1], b[2:nx])
 		h_capital[:,t+1] .= h[:,t+1] .- b
-		print("$(h_capital[16,t+1]), $(h[16,t]), $(M[16]), $(phi[16] - phi[15])\n")
+
 	end
 	V = sum(Array(h_capital[:,nt+1].*dx))
 	return V
