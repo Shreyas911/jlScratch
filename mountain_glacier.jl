@@ -71,7 +71,7 @@ end
 dx = 1.0
 xend = 30.0
 dt = 1/12.0
-tend = 1.0
+tend = 100.0
 
 nx = Int(round(xend/dx))
 xx = zeros(nx+1)
