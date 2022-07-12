@@ -2,7 +2,7 @@ using Printf
 using Statistics
 using Plots
 using Enzyme
-using CUDA
+# using CUDA
 
 # a = 4.2
 # b = [2.2, 3.3]; ∂f_∂b = zero(b)
@@ -48,7 +48,7 @@ function forward_problem(xx::AbstractArray, nx::Int, dx::Float64, xend::Float64,
 	bend = 1.0 + bx * nx *dx
 
 	h[1,:] .= AT(ones(size(h[1,:]))) .* bfirst
-	h[:,1] .= AT(ones(size(h[:,1]))) .* bfirst
+	h[:,1] .= AT(ones(size(h[:,1]))) .* b
 	h[nx+1,:] .= AT(ones(size(h[nx+1,:]))) .* bend
 	h_capital[1,:] .= h[1,:] .- bfirst
 	h_capital[nx+1,:] .= h[nx+1,:] .- bend
@@ -61,7 +61,7 @@ function forward_problem(xx::AbstractArray, nx::Int, dx::Float64, xend::Float64,
 
 		h[2:nx,t+1] .= update_h.(h[2:nx,t+1], b[2:nx])
 		h_capital[:,t+1] .= h[:,t+1] .- b
-
+		print("$(h_capital[16,t+1]), $(h[16,t]), $(M[16]), $(phi[16] - phi[15])\n")
 	end
 	V = sum(Array(h_capital[:,nt+1].*dx))
 	return V
@@ -71,20 +71,20 @@ end
 dx = 1.0
 xend = 30.0
 dt = 1/12.0
-tend = 10.0
+tend = 1.0
 
 nx = Int(round(xend/dx))
 xx = zeros(nx+1)
 ∂V_∂xx=zero(xx)
 @show V = forward_problem(xx,nx,dx,xend,dt,tend, Array)
-autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, dt, tend, Array)
-println(∂V_∂xx)
-if CUDA.has_cuda_gpu()
-	cu_xx = CuArray(xx)
-	@show cu_V = forward_problem(cu_xx,nx,dx,xend,dt,tend, CuArray)
-	cu_xx = CuArray(xx)
-	cu_∂V_∂xx = CuArray(∂V_∂xx)
-	fill!(cu_∂V_∂xx,0)
-	# autodiff(forward_problem, Active, Duplicated(cu_xx, cu_∂V_∂xx), nx, dx, xend, dt, tend, CuArray)
-	println(cu_∂V_∂xx)
-end
+# autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, dt, tend, Array)
+# println(∂V_∂xx)
+# if CUDA.has_cuda_gpu()
+# 	cu_xx = CuArray(xx)
+# 	@show cu_V = forward_problem(cu_xx,nx,dx,xend,dt,tend, CuArray)
+# 	cu_xx = CuArray(xx)
+# 	cu_∂V_∂xx = CuArray(∂V_∂xx)
+# 	fill!(cu_∂V_∂xx,0)
+# 	# autodiff(forward_problem, Active, Duplicated(cu_xx, cu_∂V_∂xx), nx, dx, xend, dt, tend, CuArray)
+# 	println(cu_∂V_∂xx)
+# end
