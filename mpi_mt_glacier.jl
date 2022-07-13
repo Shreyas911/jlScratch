@@ -78,7 +78,7 @@ function forward_problem(xx::AbstractArray, nx::Int, dx::Float64, xend::Float64,
 
 				fill!(send_mesg_left, Float64(phi[0]))
 				sreq_left = MPI.Send(send_mesg_left, rank-1, 100 + rank, comm)
-				rreq_left = MPI.Irecv!(recv_mesg_left, rank-1, 100 + rank - 1, comm)
+				rreq_left = MPI.Recv!(recv_mesg_left, rank-1, 100 + rank - 1, comm)
 
 				h[1,t+1] = h[1,t] + M[1] * dt - dt/dx * (phi[1] - recv_mesg_left[1])
 				h[1,t+1] = update_h(h[1,t+1], b[1])
@@ -88,7 +88,7 @@ function forward_problem(xx::AbstractArray, nx::Int, dx::Float64, xend::Float64,
 
 				fill!(send_mesg_right, Float64(phi[nx_local]))
 				sreq_right = MPI.Send(send_mesg_right, rank+1, 100 + rank, comm)
-				rreq_right = MPI.Irecv!(recv_mesg_right, rank+1, 100 + rank + 1, comm)
+				rreq_right = MPI.Recv!(recv_mesg_right, rank+1, 100 + rank + 1, comm)
 
 				h[nx_local+1,t+1] = h[nx_local+1,t] + M[nx_local+1] * dt - dt/dx * (recv_mesg_right[1] - phi[nx_local])
 				h[nx_local+1,t+1] = update_h(h[nx_local+1,t+1], b[nx_local+1])
@@ -98,7 +98,7 @@ function forward_problem(xx::AbstractArray, nx::Int, dx::Float64, xend::Float64,
 
 				fill!(send_mesg_right, Float64(phi[nx_local]))
 				sreq_right = MPI.Send(send_mesg_right, rank+1, 100 + rank, comm)
-				rreq_right = MPI.Irecv!(recv_mesg_right, rank+1, 100 + rank + 1, comm)
+				rreq_right = MPI.Recv!(recv_mesg_right, rank+1, 100 + rank + 1, comm)
 
 				h[nx_local+1,t+1] = h[nx_local+1,t] + M[nx_local+1] * dt - dt/dx * (recv_mesg_right[1] - phi[nx_local])
 				h[nx_local+1,t+1] = update_h(h[nx_local+1,t+1], b[nx_local+1])
@@ -106,7 +106,7 @@ function forward_problem(xx::AbstractArray, nx::Int, dx::Float64, xend::Float64,
 
 				fill!(send_mesg_left, Float64(phi[0]))
 				sreq_left = MPI.Send(send_mesg_left, rank-1, 100 + rank, comm)
-				rreq_left = MPI.Irecv!(recv_mesg_left, rank-1, 100 + rank - 1, comm)
+				rreq_left = MPI.Recv!(recv_mesg_left, rank-1, 100 + rank - 1, comm)
 
 				h[1,t+1] = h[1,t] + M[1] * dt - dt/dx * (phi[1] - recv_mesg_left[1])
 				h[1,t+1] = update_h(h[1,t+1], b[1])
@@ -142,13 +142,13 @@ print("$(MPI.Comm_rank(comm)), V = $(V)\n")
 
 MPI.Barrier(comm)
 
-# autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, dt, tend, Array)
+autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, dt, tend, Array)
 
 MPI.Barrier(comm)
 
 for i in 0:MPI.Comm_size(comm)-1
 	if MPI.Comm_rank(comm) == i
-		println(∂V_∂xx)
+		print("$(MPI.Comm_rank(comm)), ∂V_∂xx = $(∂V_∂xx)\n")
 	end
 end
 
