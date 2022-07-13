@@ -120,7 +120,34 @@ function forward_problem(xx::AbstractArray, nx::Int, dx::Float64, xend::Float64,
 
 	end
 
-	V_local = sum(h_capital[2:nx_local+1,nt+1].*dx)
+	if size > 1
+
+		if rank == 0
+			V_local = sum(h_capital[1:nx_local,nt+1].*dx) + 0.5*h_capital[nx_local+1,nt+1]*dx
+		elseif rank == size-1
+			V_local = 0.5*h_capital[1,nt+1]*dx + sum(h_capital[2:nx_local+1,nt+1].*dx)
+		else
+			V_local = 0.5*h_capital[1,nt+1]*dx + sum(h_capital[2:nx_local,nt+1].*dx) + 0.5*h_capital[nx_local+1,nt+1]*dx
+		end
+
+		# send_mesg = Array{Float64}(undef, 1)
+		# recv_mesg = Array{Float64}(undef, 1)
+
+		# if rank > 0
+		# 	fill!(send_mesg, Float64(V_local))
+		# 	sreq = MPI.Send(send_mesg, 0, 200 + rank, comm)
+		# else
+		# 	for i in 1:size-1
+		# 		rreq = MPI.Recv!(recv_mesg, i, 200 + i, comm)
+		# 		V_local = V_local + recv_mesg[1]
+		# 	end 
+		# end 
+
+	else
+
+		V_local = sum(h_capital[1:nx_local+1,nt+1].*dx)
+
+	end
 
 	return V_local
 
@@ -138,18 +165,11 @@ nx = Int(round(xend/dx))
 xx = zeros(nx+1)
 ∂V_∂xx=zero(xx)
 V = forward_problem(xx,nx,dx,xend,dt,tend, Array)
-print("$(MPI.Comm_rank(comm)), V = $(V)\n")
 
-MPI.Barrier(comm)
+print("$(MPI.Comm_rank(comm)), V = $(V)\n")
 
 autodiff(forward_problem, Active, Duplicated(xx, ∂V_∂xx), nx, dx, xend, dt, tend, Array)
 
-MPI.Barrier(comm)
-
-for i in 0:MPI.Comm_size(comm)-1
-	if MPI.Comm_rank(comm) == i
-		print("$(MPI.Comm_rank(comm)), ∂V_∂xx = $(∂V_∂xx)\n")
-	end
-end
+print("$(MPI.Comm_rank(comm)), ∂V_∂xx = $(∂V_∂xx)\n")
 
 MPI.Finalize()
