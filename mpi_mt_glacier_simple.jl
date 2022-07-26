@@ -1,73 +1,48 @@
 using Printf
-using Statistics
-using Plots
 using Enzyme
 using MPI
 
-@inline function update_h(h::Float64, b::Float64)
-	if h < b
-		h = b
-	end
-	return h
-end
-
-function forward_problem(V_local::AbstractArray , xx::AbstractArray, nx::Int, dx::Float64, xend::Float64, dt::Float64, tend::Float64, i1::Int, i2::Int)
-	
-	nt = Int(round(tend/dt))
-
-	rank = MPI.Comm_rank(MPI.COMM_WORLD)
-	size = MPI.Comm_size(MPI.COMM_WORLD)
+function forward_problem(V_local::AbstractArray , xx::AbstractArray, i1::Int, i2::Int)
 
 	nx_local = i2-i1
-	h_capital = zeros((nx_local+1, nt+1))
+	h_capital = zeros((nx_local+1,2))
 
 	xx_local = xx[i1:i2]
-	M0 = .004
-	M = M0 .+ xx_local
-
-	h_capital[1:nx_local+1,nt+1] .= M[1:nx_local+1] .* dt 
+	h_capital[1:nx_local+1,2] .= 1.0 .+ xx_local[1:nx_local+1]
 
 	if size > 1
 		if rank == 0
-			V_local[1] = sum(h_capital[1:nx_local,nt+1].*dx) + 0.5*h_capital[nx_local+1,nt+1]*dx
+			V_local[1] = sum(h_capital[1:nx_local,2]) + 0.5*h_capital[nx_local+1,2]
 		elseif rank == size-1
-			V_local[1] = 0.5*h_capital[1,nt+1]*dx + sum(h_capital[2:nx_local+1,nt+1].*dx)
+			V_local[1] = 0.5*h_capital[1,2] + sum(h_capital[2:nx_local+1,2])
 		else
-			V_local[1] = 0.5*h_capital[1,nt+1]*dx + sum(h_capital[2:nx_local,nt+1].*dx) + 0.5*h_capital[nx_local+1,nt+1]*dx
+			V_local[1] = 0.5*h_capital[1,2] + sum(h_capital[2:nx_local,2]) + 0.5*h_capital[nx_local+1,2]
 		end
 	else
-		V_local[1] = sum(h_capital[1:nx_local+1,nt+1].*dx)
+		V_local[1] = sum(h_capital[1:nx_local+1,2])
 	end
 
 	return
 end
 
-function forward_problem_no_issue(V_local::AbstractArray , xx::AbstractArray, nx::Int, dx::Float64, xend::Float64, dt::Float64, tend::Float64, i1::Int, i2::Int)
-	
-	nt = Int(round(tend/dt))
-
-	rank = MPI.Comm_rank(MPI.COMM_WORLD)
-	size = MPI.Comm_size(MPI.COMM_WORLD)
+function forward_problem_no_issue(V_local::AbstractArray , xx::AbstractArray, i1::Int, i2::Int)
 
 	nx_local = i2-i1
 	h_capital = zeros((nx_local+1))
 
 	xx_local = xx[i1:i2]
-	M0 = .004
-	M = M0 .+ xx_local
-
-	h_capital[1:nx_local+1] .= M[1:nx_local+1] .* dt 
+	h_capital[1:nx_local+1] .= 1.0 .+ xx_local[1:nx_local+1]
 
 	if size > 1
 		if rank == 0
-			V_local[1] = sum(h_capital[1:nx_local].*dx) + 0.5*h_capital[nx_local+1]*dx
+			V_local[1] = sum(h_capital[1:nx_local]) + 0.5*h_capital[nx_local+1]
 		elseif rank == size-1
-			V_local[1] = 0.5*h_capital[1]*dx + sum(h_capital[2:nx_local+1].*dx)
+			V_local[1] = 0.5*h_capital[1] + sum(h_capital[2:nx_local+1])
 		else
-			V_local[1] = 0.5*h_capital[1]*dx + sum(h_capital[2:nx_local].*dx) + 0.5*h_capital[nx_local+1]*dx
+			V_local[1] = 0.5*h_capital[1] + sum(h_capital[2:nx_local]) + 0.5*h_capital[nx_local+1]
 		end
 	else
-		V_local[1] = sum(h_capital[1:nx_local+1].*dx)
+		V_local[1] = sum(h_capital[1:nx_local+1])
 	end
 
 	return
@@ -78,35 +53,22 @@ end
 
 MPI.Init()
 
-### WORKS INCORRECTLY
-
-dx = 3.0
-xend = 30.0
-dt = 1/12.0
-tend = 1/12.0
-
-nx = Int(round(xend/dx))
-xx = zeros(nx+1)
-∂V_∂xx=zeros(nx+1)
-V = [0.0]
-
 rank = MPI.Comm_rank(MPI.COMM_WORLD)
 size = MPI.Comm_size(MPI.COMM_WORLD)
 
-i1 = Int(round(rank / size * (nx+size))) - rank + 1
-i2 = Int(round((rank + 1) / size * (nx+size))) - rank
+i1 = Int(round(rank / size * (4+size))) - rank + 1
+i2 = Int(round((rank + 1) / size * (4+size))) - rank
 
 print("rank = $(rank), i1 = $(i1), i2 = $(i2)\n")
 
-forward_problem(V, xx, nx, dx, xend, dt, tend, i1, i2)
-MPI.Reduce!(V, MPI.SUM, 0, MPI.COMM_WORLD)
-if rank == 0
-	print("V = $(V)\n")
-end
+### WORKS INCORRECTLY
 
+xx = zeros(5)
+∂V_∂xx=zeros(5)
 dV = [1.0]
 V = [0.0]
-autodiff(forward_problem, Duplicated(V, dV), Duplicated(xx, ∂V_∂xx), nx, dx, xend, dt, tend, i1, i2)
+
+autodiff(forward_problem, Duplicated(V, dV), Duplicated(xx, ∂V_∂xx), i1, i2)
 MPI.Reduce!(V, MPI.SUM, 0, MPI.COMM_WORLD)
 MPI.Reduce!(∂V_∂xx, MPI.SUM, 0, MPI.COMM_WORLD)
 
@@ -118,33 +80,12 @@ MPI.Barrier(MPI.COMM_WORLD)
 
 ### WORKS CORRECTLY
 
-dx = 3.0
-xend = 30.0
-dt = 1/12.0
-tend = 1/12.0
-
-nx = Int(round(xend/dx))
-xx = zeros(nx+1)
-∂V_∂xx=zeros(nx+1)
-V = [0.0]
-
-rank = MPI.Comm_rank(MPI.COMM_WORLD)
-size = MPI.Comm_size(MPI.COMM_WORLD)
-
-i1 = Int(round(rank / size * (nx+size))) - rank + 1
-i2 = Int(round((rank + 1) / size * (nx+size))) - rank
-
-print("rank = $(rank), i1 = $(i1), i2 = $(i2)\n")
-
-forward_problem_no_issue(V, xx, nx, dx, xend, dt, tend, i1, i2)
-MPI.Reduce!(V, MPI.SUM, 0, MPI.COMM_WORLD)
-if rank == 0
-	print("V = $(V)\n")
-end
-
+xx = zeros(5)
+∂V_∂xx=zeros(5)
 dV = [1.0]
 V = [0.0]
-autodiff(forward_problem_no_issue, Duplicated(V, dV), Duplicated(xx, ∂V_∂xx), nx, dx, xend, dt, tend, i1, i2)
+
+autodiff(forward_problem_no_issue, Duplicated(V, dV), Duplicated(xx, ∂V_∂xx), i1, i2)
 MPI.Reduce!(V, MPI.SUM, 0, MPI.COMM_WORLD)
 MPI.Reduce!(∂V_∂xx, MPI.SUM, 0, MPI.COMM_WORLD)
 
