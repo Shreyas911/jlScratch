@@ -109,15 +109,10 @@ function forward_problem(V_local::AbstractArray , xx::AbstractArray, nx::Int, dx
 				h_capital[1,t+1] = h[1,t+1] - b[1]
 
 			end
-
 		end
-
-	# 	MPI.Barrier(MPI.COMM_WORLD)
-
 	end
 
 	if size > 1
-
 		if rank == 0
 			V_local[1] = sum(h_capital[1:nx_local,nt+1].*dx) + 0.5*h_capital[nx_local+1,nt+1]*dx
 		elseif rank == size-1
@@ -125,28 +120,11 @@ function forward_problem(V_local::AbstractArray , xx::AbstractArray, nx::Int, dx
 		else
 			V_local[1] = 0.5*h_capital[1,nt+1]*dx + sum(h_capital[2:nx_local,nt+1].*dx) + 0.5*h_capital[nx_local+1,nt+1]*dx
 		end
-
-		# send_mesg = Array{Float64}(undef, 1)
-		# recv_mesg = Array{Float64}(undef, 1)
-
-		# if rank > 0
-		# 	fill!(send_mesg, Float64(V_local))
-		# 	sreq = MPI.Send(send_mesg, 0, 200 + rank, comm)
-		# else
-		# 	for i in 1:size-1
-		# 		rreq = MPI.Recv!(recv_mesg, i, 200 + i, comm)
-		# 		V_local = V_local + recv_mesg[1]
-		# 	end
-		# end
-
 	else
-
 		V_local[1] = sum(h_capital[1:nx_local+1,nt+1].*dx)
-
 	end
 
 	return
-
 end
 
 MPI.Init()
